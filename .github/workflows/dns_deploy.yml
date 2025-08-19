@@ -1,19 +1,94 @@
-name: 'Terraform CI/CD'
+name: 'Cloudflare DNS Management'
 
 on:
   push:
     branches:
       - main
+    paths:
+      - 'domains/**'
+      - 'modules/**'
+      - 'shared/**'
   pull_request:
+    paths:
+      - 'domains/**'
+      - 'modules/**' 
+      - 'shared/**'
+
+env:
+  TF_IN_AUTOMATION: true
+  TF_CLI_ARGS: "-no-color"
 
 jobs:
-  terraform:
-    name: 'Terraform'
+  # Detect which domain families have changes
+  detect-changes:
+    name: 'Detect Changed Families'
     runs-on: ubuntu-latest
+    outputs:
+      families: ${{ steps.changes.outputs.families }}
+      families-json: ${{ steps.changes.outputs.families-json }}
+    
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 'Detect Changed Domain Families'
+        id: changes
+        run: |
+          echo "Detecting changes in domain families..."
+          
+          # Get list of changed files
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          else
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          fi
+          
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          
+          # Extract unique domain families from changed files
+          FAMILIES=$(echo "$CHANGED_FILES" | grep -E '^domains/[^/]+/' | cut -d'/' -f2 | sort -u | tr '\n' ' ')
+          
+          # Check if modules or shared files changed (affects all families)
+          if echo "$CHANGED_FILES" | grep -qE '^(modules|shared)/'; then
+            echo "Global changes detected in modules or shared - will deploy all families"
+            ALL_FAMILIES=$(find domains -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort | tr '\n' ' ')
+            FAMILIES="$ALL_FAMILIES"
+          fi
+          
+          # Remove trailing space and convert to array format for matrix
+          FAMILIES=$(echo "$FAMILIES" | sed 's/ $//')
+          
+          if [ -z "$FAMILIES" ]; then
+            echo "No domain families changed"
+            echo "families=" >> $GITHUB_OUTPUT
+            echo "families-json=[]" >> $GITHUB_OUTPUT
+          else
+            echo "Changed families: $FAMILIES"
+            # Convert to JSON array for matrix strategy
+            FAMILIES_JSON=$(echo "$FAMILIES" | tr ' ' '\n' | jq -R . | jq -s .)
+            echo "families=$FAMILIES" >> $GITHUB_OUTPUT
+            echo "families-json=$FAMILIES_JSON" >> $GITHUB_OUTPUT
+          fi
+
+  # Plan stage for pull requests
+  plan:
+    name: 'Plan (${{ matrix.family }})'
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: github.event_name == 'pull_request' && needs.detect-changes.outputs.families != ''
+    
     permissions:
       contents: read
       pull-requests: write
-
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        family: ${{ fromJson(needs.detect-changes.outputs.families-json) }}
+    
     steps:
       - name: 'Checkout'
         uses: actions/checkout@v4
@@ -23,43 +98,159 @@ jobs:
         with:
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
-      - name: 'Terraform Init'
+      - name: 'Terraform Init (${{ matrix.family }})'
         id: init
-        run: terraform init
+        working-directory: domains/${{ matrix.family }}
+        run: |
+          echo "Initializing Terraform for ${{ matrix.family }} family..."
+          terraform init
 
-      - name: 'Terraform Plan'
+      - name: 'Terraform Validate (${{ matrix.family }})'
+        id: validate
+        working-directory: domains/${{ matrix.family }}
+        run: terraform validate
+
+      - name: 'Terraform Plan (${{ matrix.family }})'
         id: plan
-        if: github.event_name == 'pull_request'
-        run: terraform plan -no-color
+        working-directory: domains/${{ matrix.family }}
+        run: |
+          echo "Running plan for ${{ matrix.family }} family..."
+          terraform plan -detailed-exitcode -out=tfplan || EXIT_CODE=$?
+          
+          # detailed-exitcode: 0 = no changes, 1 = error, 2 = changes
+          if [ "${EXIT_CODE}" = "1" ]; then
+            exit 1
+          elif [ "${EXIT_CODE}" = "2" ]; then
+            echo "changes-detected=true" >> $GITHUB_OUTPUT
+          else
+            echo "changes-detected=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Show plan output
+          terraform show -no-color tfplan
         continue-on-error: true
 
-      - name: Update PR with Plan
+      - name: 'Generate Plan Summary (${{ matrix.family }})'
+        if: always()
+        working-directory: domains/${{ matrix.family }}
+        run: |
+          echo "## 🏗️ Terraform Plan Summary - ${{ matrix.family }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.init.outcome }}" = "success" ]; then
+            echo "✅ **Initialization**: Success" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Initialization**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ steps.validate.outcome }}" = "success" ]; then
+            echo "✅ **Validation**: Success" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Validation**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ steps.plan.outcome }}" = "success" ]; then
+            if [ "${{ steps.plan.outputs.changes-detected }}" = "true" ]; then
+              echo "🔄 **Plan**: Changes detected" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "✅ **Plan**: No changes" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "❌ **Plan**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: 'Comment PR (${{ matrix.family }})'
         uses: actions/github-script@v7
         if: github.event_name == 'pull_request'
-        env:
-          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const output = `#### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
-            #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
-            <details><summary>Show Plan</summary>
-            \`\`\`\n
-            ${process.env.PLAN}
-            \`\`\`
+            const fs = require('fs');
+            const path = require('path');
+            
+            const family = '${{ matrix.family }}';
+            const initOutcome = '${{ steps.init.outcome }}';
+            const validateOutcome = '${{ steps.validate.outcome }}';
+            const planOutcome = '${{ steps.plan.outcome }}';
+            const changesDetected = '${{ steps.plan.outputs.changes-detected }}';
+            
+            let status = '✅';
+            if (initOutcome !== 'success' || validateOutcome !== 'success' || planOutcome !== 'success') {
+              status = '❌';
+            } else if (changesDetected === 'true') {
+              status = '🔄';
+            }
+            
+            const output = `### ${status} Terraform Plan - \`${family}\` Family
+            
+            | Stage | Status |
+            |-------|--------|
+            | 🏗️ Init | ${initOutcome === 'success' ? '✅' : '❌'} |
+            | 🔍 Validate | ${validateOutcome === 'success' ? '✅' : '❌'} |
+            | 📋 Plan | ${planOutcome === 'success' ? (changesDetected === 'true' ? '🔄 Changes' : '✅ No Changes') : '❌ Failed'} |
+            
+            <details><summary>📂 Domain Family: ${family}</summary>
+            
+            This plan covers all domains in the **${family}** family.
+            
             </details>
-            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+            
+            *Terraform Plan by @${{ github.actor }} via ${{ github.event_name }}*`;
+            
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: output
-            })
+            });
 
-      - name: Terraform Plan Status
-        if: steps.plan.outcome == 'failure'
-        run: exit 1
+  # Apply stage for main branch
+  apply:
+    name: 'Apply (${{ matrix.family }})'
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.detect-changes.outputs.families != ''
+    
+    environment:
+      name: production
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        family: ${{ fromJson(needs.detect-changes.outputs.families-json) }}
+    
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v4
 
-      - name: 'Terraform Apply'
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply
+      - name: 'Setup Terraform'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: 'Terraform Init (${{ matrix.family }})'
+        working-directory: domains/${{ matrix.family }}
+        run: |
+          echo "Initializing Terraform for ${{ matrix.family }} family..."
+          terraform init
+
+      - name: 'Terraform Plan (${{ matrix.family }})'
+        working-directory: domains/${{ matrix.family }}
+        run: |
+          echo "Planning deployment for ${{ matrix.family }} family..."
+          terraform plan -out=tfplan
+
+      - name: 'Terraform Apply (${{ matrix.family }})'
+        working-directory: domains/${{ matrix.family }}
+        run: |
+          echo "Applying changes for ${{ matrix.family }} family..."
+          terraform apply tfplan
+
+      - name: 'Generate Apply Summary (${{ matrix.family }})'
+        if: always()
+        run: |
+          echo "## 🚀 Terraform Apply Summary - ${{ matrix.family }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Family**: ${{ matrix.family }}" >> $GITHUB_STEP_SUMMARY
+          echo "🏃 **Action**: Applied" >> $GITHUB_STEP_SUMMARY
+          echo "📅 **Time**: $(date)" >> $GITHUB_STEP_SUMMARY
