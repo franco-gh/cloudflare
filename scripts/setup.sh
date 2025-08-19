@@ -135,39 +135,63 @@ fi
 
 echo ""
 
-# Check 2: Environment variables
-print_step "Checking environment variables..."
+# Check 2: Cloudflare configuration (hybrid approach)
+print_step "Checking Cloudflare configuration..."
+
+# Check API Token - Environment variable first, then tfvars fallback
+if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+    print_success "CLOUDFLARE_API_TOKEN found in environment variables"
+    TOKEN_SOURCE="environment"
+elif [ -f "shared/terraform.tfvars" ]; then
+    # Extract token from tfvars file
+    CLOUDFLARE_API_TOKEN=$(grep 'cloudflare_api_token' shared/terraform.tfvars | cut -d'"' -f2 2>/dev/null)
+    if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+        print_success "CLOUDFLARE_API_TOKEN found in shared/terraform.tfvars"
+        TOKEN_SOURCE="tfvars"
+    fi
+fi
 
 if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
-    print_success "CLOUDFLARE_API_TOKEN is set"
-    
     # Validate token format (should be 40 characters)
     if [ ${#CLOUDFLARE_API_TOKEN} -eq 40 ]; then
-        print_success "API token format appears valid"
+        print_success "API token format appears valid ($TOKEN_SOURCE)"
     else
-        print_warn "API token length unusual (expected 40 characters, got ${#CLOUDFLARE_API_TOKEN})"
+        print_warn "API token length unusual (expected 40 characters, got ${#CLOUDFLARE_API_TOKEN}) from $TOKEN_SOURCE"
         add_warning
     fi
 else
-    print_failure "CLOUDFLARE_API_TOKEN not set"
+    print_failure "CLOUDFLARE_API_TOKEN not found"
     add_error
     print_info "Set it with: export CLOUDFLARE_API_TOKEN=\"your_token_here\""
+    print_info "Or add to shared/terraform.tfvars: cloudflare_api_token = \"your_token_here\""
+fi
+
+# Check Account ID - Environment variable first, then tfvars fallback
+if [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+    print_success "CLOUDFLARE_ACCOUNT_ID found in environment variables"
+    ACCOUNT_SOURCE="environment"
+elif [ -f "shared/terraform.tfvars" ]; then
+    # Extract account ID from tfvars file
+    CLOUDFLARE_ACCOUNT_ID=$(grep 'cloudflare_account_id' shared/terraform.tfvars | cut -d'"' -f2 2>/dev/null)
+    if [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+        print_success "CLOUDFLARE_ACCOUNT_ID found in shared/terraform.tfvars"
+        ACCOUNT_SOURCE="tfvars"
+    fi
 fi
 
 if [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
-    print_success "CLOUDFLARE_ACCOUNT_ID is set"
-    
     # Validate account ID format (should be 32 hex characters)
     if [[ "$CLOUDFLARE_ACCOUNT_ID" =~ ^[a-f0-9]{32}$ ]]; then
-        print_success "Account ID format appears valid"
+        print_success "Account ID format appears valid ($ACCOUNT_SOURCE)"
     else
-        print_warn "Account ID format unusual (expected 32 hex characters)"
+        print_warn "Account ID format unusual (expected 32 hex characters) from $ACCOUNT_SOURCE"
         add_warning
     fi
 else
-    print_failure "CLOUDFLARE_ACCOUNT_ID not set"
+    print_failure "CLOUDFLARE_ACCOUNT_ID not found"
     add_error
     print_info "Set it with: export CLOUDFLARE_ACCOUNT_ID=\"your_account_id_here\""
+    print_info "Or add to shared/terraform.tfvars: cloudflare_account_id = \"your_account_id_here\""
 fi
 
 echo ""
@@ -179,7 +203,7 @@ if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
     print_info "Testing API token..."
     
     # Test API connectivity
-    API_RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "https://api.cloudflare.com/v4/user/tokens/verify" \
+    API_RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/tokens/verify" \
         -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
         -H "Content-Type: application/json" || echo -e "\n000")
     
@@ -211,13 +235,13 @@ fi
 
 echo ""
 
-# Check 4: Account access
+# Check 4: Account access (optional for DNS-scoped tokens)
 print_step "Testing account access..."
 
 if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
-    print_info "Testing account access..."
+    print_info "Testing account access (optional for DNS-scoped tokens)..."
     
-    ACCOUNT_RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "https://api.cloudflare.com/v4/accounts/$CLOUDFLARE_ACCOUNT_ID" \
+    ACCOUNT_RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID" \
         -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
         -H "Content-Type: application/json" || echo -e "\n000")
     
@@ -229,13 +253,15 @@ if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
             ACCOUNT_NAME=$(echo "$ACCOUNT_BODY" | jq -r '.result.name' 2>/dev/null || echo "Unknown")
             print_success "Account access confirmed: $ACCOUNT_NAME"
         else
-            print_failure "Account access failed"
-            add_error
-            echo "$ACCOUNT_BODY" | jq '.errors' 2>/dev/null || echo "$ACCOUNT_BODY"
+            print_warn "Account access failed (DNS-scoped tokens don't need account permissions)"
+            add_warning
         fi
+    elif [ "$HTTP_CODE" = "403" ]; then
+        print_warn "Account access forbidden (expected for DNS-scoped tokens)"
+        print_info "This is normal - DNS tokens don't require account read permissions"
     else
-        print_failure "Account access test failed (HTTP $HTTP_CODE)"
-        add_error
+        print_warn "Account access test failed (HTTP $HTTP_CODE) - acceptable for DNS-scoped tokens"
+        add_warning
     fi
 else
     print_warn "Skipping account test (missing credentials)"
@@ -293,11 +319,27 @@ print_step "Validating Terraform configurations..."
 for module in "modules/zone" "modules/dns"; do
     if [ -d "$module" ]; then
         print_info "Validating $module..."
+        
+        # Initialize module if .terraform directory doesn't exist
+        if [ ! -d "$module/.terraform" ]; then
+            print_info "Initializing $module (first time setup)..."
+            if (cd "$module" && terraform init) &>/dev/null; then
+                print_success "Module initialized: $module"
+            else
+                print_warn "Module initialization failed: $module (continuing with validation)"
+                add_warning
+            fi
+        fi
+        
+        # Validate module
         if (cd "$module" && terraform validate) &>/dev/null; then
             print_success "Module validation passed: $module"
         else
             print_failure "Module validation failed: $module"
             add_error
+            # Show the actual error
+            print_info "Validation error details:"
+            (cd "$module" && terraform validate) 2>&1 | head -5
         fi
     fi
 done

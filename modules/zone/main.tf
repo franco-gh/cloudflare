@@ -2,38 +2,78 @@
 # Creates and manages a Cloudflare zone with associated settings
 
 resource "cloudflare_zone" "main" {
-  zone = var.domain_name
-  plan = var.zone_plan
-  type = "full"
+  account = var.account_id
+  name    = var.domain_name
+  plan    = var.zone_plan
+  type    = "full"
 }
 
-# Zone settings configuration
-resource "cloudflare_zone_settings_override" "main" {
+# Zone settings configuration using individual zone_setting resources
+# SSL/TLS settings
+resource "cloudflare_zone_setting" "ssl" {
   zone_id = cloudflare_zone.main.id
+  name    = "ssl"
+  value   = var.ssl_mode
+}
 
-  settings {
-    # SSL/TLS settings
-    ssl                      = var.ssl_mode
-    always_use_https        = var.always_use_https
-    min_tls_version         = var.min_tls_version
-    automatic_https_rewrites = var.automatic_https_rewrites
+resource "cloudflare_zone_setting" "always_use_https" {
+  zone_id = cloudflare_zone.main.id
+  name    = "always_use_https"
+  value   = var.always_use_https ? "on" : "off"
+}
 
-    # Security settings
-    security_level          = var.security_level
-    challenge_ttl          = var.challenge_ttl
-    browser_check          = var.browser_check
+resource "cloudflare_zone_setting" "min_tls_version" {
+  zone_id = cloudflare_zone.main.id
+  name    = "min_tls_version"
+  value   = var.min_tls_version
+}
 
-    # Performance settings
-    brotli                 = var.brotli
-    minify {
-      css  = var.minify_css
-      html = var.minify_html
-      js   = var.minify_js
-    }
+resource "cloudflare_zone_setting" "automatic_https_rewrites" {
+  zone_id = cloudflare_zone.main.id
+  name    = "automatic_https_rewrites"
+  value   = var.automatic_https_rewrites ? "on" : "off"
+}
 
-    # Development mode
-    development_mode = var.development_mode
-  }
+# Security settings
+resource "cloudflare_zone_setting" "security_level" {
+  zone_id = cloudflare_zone.main.id
+  name    = "security_level"
+  value   = var.security_level
+}
+
+resource "cloudflare_zone_setting" "challenge_ttl" {
+  zone_id = cloudflare_zone.main.id
+  name    = "challenge_ttl"
+  value   = var.challenge_ttl
+}
+
+resource "cloudflare_zone_setting" "browser_check" {
+  zone_id = cloudflare_zone.main.id
+  name    = "browser_check"
+  value   = var.browser_check
+}
+
+# Performance settings
+resource "cloudflare_zone_setting" "brotli" {
+  zone_id = cloudflare_zone.main.id
+  name    = "brotli"
+  value   = var.brotli
+}
+
+resource "cloudflare_zone_setting" "minify_css" {
+  zone_id = cloudflare_zone.main.id
+  name    = "minify"
+  value   = jsonencode({
+    css  = var.minify_css
+    html = var.minify_html
+    js   = var.minify_js
+  })
+}
+
+resource "cloudflare_zone_setting" "development_mode" {
+  zone_id = cloudflare_zone.main.id
+  name    = "development_mode"
+  value   = var.development_mode ? "on" : "off"
 }
 
 # DNSSEC configuration (optional)

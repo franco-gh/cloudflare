@@ -21,7 +21,7 @@ This repository manages DNS records for 100+ domains across multiple domain fami
 terraform/
 ├── modules/                    # Reusable infrastructure modules
 │   ├── zone/                  # Zone creation (cloudflare_zone)
-│   └── dns/                   # DNS records (cloudflare_record)
+│   └── dns/                   # DNS records (cloudflare_dns_record)
 ├── domains/                   # Domain family configurations
 │   ├── iamfranco/             # Domain family (workspace: iamfranco)
 │   │   ├── backend.tf         # Terraform Cloud workspace config

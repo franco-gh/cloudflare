@@ -1,6 +1,12 @@
 # Shared variables used across all domain families
 
-# Domain Configuration
+# Cloudflare Authentication
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token with permissions to manage DNS records"
+  type        = string
+  sensitive   = true
+}
+
 variable "cloudflare_account_id" {
   description = "Cloudflare Account ID"
   type        = string
@@ -33,3 +39,4 @@ variable "default_zone_plan" {
     error_message = "Zone plan must be one of: free, pro, business, enterprise."
   }
 }
+
