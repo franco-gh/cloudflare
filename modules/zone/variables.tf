@@ -1,5 +1,10 @@
 # Zone Module Variables
 
+variable "account_id" {
+  description = "Cloudflare account ID"
+  type        = string
+}
+
 variable "domain_name" {
   description = "The domain name for this zone"
   type        = string

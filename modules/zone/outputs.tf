@@ -7,7 +7,7 @@ output "zone_id" {
 
 output "zone_name" {
   description = "The zone name"
-  value       = cloudflare_zone.main.zone
+  value       = cloudflare_zone.main.name
 }
 
 output "name_servers" {

@@ -4,14 +4,14 @@ terraform {
   required_providers {
     cloudflare = {
       source  = "cloudflare/cloudflare"
-      version = "~> 4.0"
+      version = "~> 5.0"
     }
   }
 }
 
 # Cloudflare provider configuration
-# Automatically reads CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID environment variables
+# Using variables from terraform.tfvars
 provider "cloudflare" {
-  # api_token is read from CLOUDFLARE_API_TOKEN environment variable
-  # account_id is read from CLOUDFLARE_ACCOUNT_ID environment variable
+  api_token = var.cloudflare_api_token
+  # account_id is passed to individual resources, not the provider
 }

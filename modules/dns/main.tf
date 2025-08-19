@@ -1,7 +1,7 @@
 # DNS Records Module
 # Creates and manages DNS records for a given zone
 
-resource "cloudflare_record" "records" {
+resource "cloudflare_dns_record" "records" {
   for_each = var.dns_records
 
   zone_id = var.zone_id
@@ -25,7 +25,7 @@ resource "cloudflare_record" "records" {
 }
 
 # Optional: Create DNSSEC records if needed
-resource "cloudflare_record" "dnssec_records" {
+resource "cloudflare_dns_record" "dnssec_records" {
   for_each = var.dnssec_records
 
   zone_id = var.zone_id

@@ -277,7 +277,7 @@ jq -r '.[] | @base64' "$RECORDS_FILE" | while read -r record; do
     
     TF_RECORD_NAME="${TF_RECORD_NAME}_${RECORD_TYPE,,}"
     
-    echo "terraform import 'module.${DOMAIN_NAME}.module.dns.cloudflare_record.records[\"$TF_RECORD_NAME\"]' $RECORD_ID" >> "$IMPORT_COMMANDS"
+    echo "terraform import 'module.${DOMAIN_NAME}.module.dns.cloudflare_dns_record.records[\"$TF_RECORD_NAME\"]' $RECORD_ID" >> "$IMPORT_COMMANDS"
 done
 
 cat >> "$IMPORT_COMMANDS" << 'EOF'
