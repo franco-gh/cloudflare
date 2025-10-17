@@ -15,12 +15,12 @@ Scalable multi-domain DNS management infrastructure using Terraform, organized b
 │   │       ├── variables.tf
 │   │       ├── outputs.tf
 │   │       └── terraform.tfvars
-│   └── contoso/               # Family: contoso (multi-TLD example)
+│   └── example/               # Family: example (multi-TLD example)
 │       ├── backend.tf
 │       ├── main.tf
-│       ├── contoso-com/       # contoso.com
-│       ├── contoso-net/       # contoso.net  
-│       └── contoso-co/        # contoso.co
+│       ├── example-com/       # example.com
+│       ├── example-net/       # example.net
+│       └── example-co/        # example.co
 ├── modules/                   # Reusable Terraform modules
 │   ├── zone/                  # Zone management module
 │   └── dns/                   # DNS records module
@@ -67,7 +67,7 @@ terraform {
   cloud {
     organization = "your-terraform-cloud-org"
     workspaces {
-      name = "family-name"  # e.g., "iamfranco", "contoso"
+      name = "family-name"  # e.g., "iamfranco", "example"
     }
   }
 }
@@ -118,7 +118,7 @@ Import DNS records from existing Cloudflare zones:
 Domain families group related TLDs together:
 
 - **iamfranco family**: iamfranco.com, iamfranco.net, iamfranco.org
-- **contoso family**: contoso.com, contoso.net, contoso.co
+- **example family**: example.com, example.net, example.co (placeholder/demo)
 - **client1 family**: client1.com, client1.app
 
 Each family has its own Terraform Cloud workspace for isolated state management.
@@ -136,7 +136,7 @@ Environment validation and setup assistance
 Create new domain configurations
 ```bash
 ./scripts/new-domain.sh <family-name> <domain-name>
-./scripts/new-domain.sh contoso contoso-org
+./scripts/new-domain.sh example example-org
 ```
 
 ### `./scripts/import-dns.sh`

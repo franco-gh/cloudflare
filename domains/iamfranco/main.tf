@@ -8,7 +8,7 @@ terraform {
   required_providers {
     cloudflare = {
       source  = "cloudflare/cloudflare"
-      version = "~> 4.0"
+      version = "~> 5.0"
     }
   }
 }
@@ -19,7 +19,16 @@ provider "cloudflare" {
   # account_id is read from CLOUDFLARE_ACCOUNT_ID environment variable
 }
 
+# Variables
+variable "account_id" {
+  description = "Cloudflare account ID"
+  type        = string
+}
+
 # Include individual domain configurations
 module "iamfranco_com" {
   source = "./iamfranco-com"
+
+  # Pass account ID from environment variable
+  account_id = var.account_id
 }

@@ -1,4 +1,4 @@
-# contoso.co Domain Configuration
+# example.net Domain Configuration
 
 # Create the zone
 module "zone" {

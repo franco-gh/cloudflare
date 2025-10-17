@@ -1,14 +1,14 @@
-# contoso Domain Family Configuration
-# This file manages all domains in the contoso family
+# example Domain Family Configuration
+# This file manages all domains in the example family (placeholder/demo domains)
 
 # Provider configuration
 terraform {
   required_version = ">= 1.0"
-  
+
   required_providers {
     cloudflare = {
       source  = "cloudflare/cloudflare"
-      version = "~> 4.0"
+      version = "~> 5.0"
     }
   }
 }
@@ -20,14 +20,14 @@ provider "cloudflare" {
 }
 
 # Include individual domain configurations
-module "contoso-com" {
-  source = "./contoso-com"
+module "example-com" {
+  source = "./example-com"
 }
 
-module "contoso-net" {
-  source = "./contoso-net"
+module "example-net" {
+  source = "./example-net"
 }
 
-module "contoso-co" {
-  source = "./contoso-co"
+module "example-co" {
+  source = "./example-co"
 }

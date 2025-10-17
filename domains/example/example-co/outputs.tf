@@ -1,12 +1,12 @@
-# contoso.net Domain Outputs
+# example.co Domain Outputs
 
 output "zone_id" {
-  description = "Zone ID for contoso.net"
+  description = "Zone ID for example.co"
   value       = module.zone.zone_id
 }
 
 output "nameservers" {
-  description = "Cloudflare nameservers for contoso.net"
+  description = "Cloudflare nameservers for example.co"
   value       = module.zone.name_servers
 }
 

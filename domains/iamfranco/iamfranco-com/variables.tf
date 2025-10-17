@@ -1,5 +1,15 @@
 # iamfranco.com Domain Variables
 
+variable "account_id" {
+  description = "Cloudflare account ID"
+  type        = string
+}
+
+variable "cloudflare_email" {
+  description = "Cloudflare email address for API authentication"
+  type        = string
+}
+
 variable "domain_name" {
   description = "Domain name"
   type        = string

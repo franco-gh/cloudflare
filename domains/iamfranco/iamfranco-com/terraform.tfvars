@@ -105,3 +105,6 @@ minify_js   = true
 
 development_mode = false
 enable_dnssec    = true
+
+account_id = "73d8ffe6470456456012320aba602c2e"  # Replace with your Cloudflare account ID
+cloudflare_email = "franco244@gmail.com"  # Replace with your Cloudflare email

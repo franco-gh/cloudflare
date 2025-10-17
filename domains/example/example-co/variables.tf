@@ -1,9 +1,9 @@
-# contoso.com Domain Variables
+# example.co Domain Variables
 
 variable "domain_name" {
   description = "Domain name"
   type        = string
-  default     = "contoso.com"
+  default     = "example.co"
 }
 
 variable "zone_plan" {
@@ -96,7 +96,7 @@ variable "enable_dnssec" {
 
 # DNS Records Configuration
 variable "dns_records" {
-  description = "DNS records to create for contoso.com"
+  description = "DNS records to create for example.co"
   type = map(object({
     type     = string
     name     = string
@@ -114,8 +114,8 @@ variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)
   default = {
-    domain     = "contoso.com"
-    family     = "contoso"
+    domain     = "example.co"
+    family     = "example"
     managed_by = "terraform"
   }
 }

@@ -1,9 +1,11 @@
 # iamfranco.com Domain Configuration
+# Provider is inherited from parent module (domains/iamfranco/main.tf)
 
 # Create the zone
 module "zone" {
   source = "../../../modules/zone"
 
+  account_id  = var.account_id
   domain_name = var.domain_name
   zone_plan   = var.zone_plan
 

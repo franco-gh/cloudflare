@@ -1,7 +1,7 @@
 # Terraform Cloud backend configuration for iamfranco domain family
 terraform {
   cloud {
-    organization = "your-terraform-cloud-org"  # Update this with your actual organization
+    organization = "CUM"
     workspaces {
       name = "iamfranco"
     }

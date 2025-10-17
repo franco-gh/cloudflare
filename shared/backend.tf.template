@@ -1,0 +1,17 @@
+# Centralized backend template using environment variables
+# Copy this to domains/{family}/backend.tf and customize workspace name
+
+terraform {
+  cloud {
+    # Organization from TF_CLOUD_ORGANIZATION environment variable
+    # Set with: export TF_CLOUD_ORGANIZATION="your-terraform-cloud-org"
+    workspaces {
+      name = "WORKSPACE_NAME_PLACEHOLDER"  # Replace with actual family name
+    }
+  }
+}
+
+# Usage:
+# 1. Set environment variable: export TF_CLOUD_ORGANIZATION="your-org"
+# 2. Replace WORKSPACE_NAME_PLACEHOLDER with family name
+# 3. Run: terraform init

@@ -9,10 +9,12 @@ resource "cloudflare_dns_record" "records" {
   content = each.value.content
   type    = each.value.type
   ttl     = each.value.ttl
-  proxied = each.value.proxied
+
+  # Conditional proxying - only for supported record types
+  proxied = each.value.proxied && contains(["A", "AAAA", "CNAME"], each.value.type) ? each.value.proxied : false
 
   # Optional fields for specific record types
-  priority = each.value.priority
+  priority = each.value.type == "MX" || each.value.type == "SRV" ? each.value.priority : null
 
   # Add comment if provided
   comment = each.value.comment
@@ -21,6 +23,9 @@ resource "cloudflare_dns_record" "records" {
   lifecycle {
     # Prevent accidental deletion of critical records
     prevent_destroy = false
+
+    # Ignore changes to these computed attributes
+    ignore_changes = [ttl]
   }
 }
 

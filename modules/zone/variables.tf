@@ -15,7 +15,7 @@ variable "domain_name" {
 }
 
 variable "zone_plan" {
-  description = "Cloudflare zone plan"
+  description = "Cloudflare zone plan (deprecated in provider v5+, kept for compatibility)"
   type        = string
   default     = "free"
   validation {

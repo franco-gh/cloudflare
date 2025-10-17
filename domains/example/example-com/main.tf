@@ -1,4 +1,4 @@
-# contoso.com Domain Configuration
+# example.com Domain Configuration (Placeholder/Demo)
 
 # Create the zone
 module "zone" {
